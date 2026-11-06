@@ -189,7 +189,7 @@ cd dbt && DBT_TARGET=snowflake dbt build --profiles-dir .
 1. Push this folder to a **public GitHub repo**, with `precomputed/` (including `precomputed/marts/`) included.
 2. Go to <https://share.streamlit.io>, sign in with GitHub, and click **Create app → Deploy a public app from GitHub**.
 3. Choose the repo, branch `main`, and main file `app.py`.
-4. Under **Advanced settings**, choose **Python 3.12** or newer (tested on 3.13).
+4. Under **Advanced settings**, choose any Python from **3.11 to 3.14**. `requirements.txt` uses version ranges, so it resolves on all of them. Tests pass on 3.12 (Streamlit 1.67, NumPy 2.5) and 3.13 (Streamlit 1.51, NumPy 2.3).
 5. Optional, to serve from Snowflake: under **Advanced settings → Secrets**, paste the contents of your filled-in `secrets.toml` (the read-only `SHORTAGE_APP` user). Without secrets, the app serves the local mart snapshot.
 6. Click **Deploy**.
 

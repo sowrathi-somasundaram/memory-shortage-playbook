@@ -1,9 +1,11 @@
-# Runtime (Streamlit Community Cloud installs this file)
-streamlit==1.51.0
-pandas==2.3.3
-numpy==2.3.5
-plotly==6.3.0
-scipy==1.16.3
-pulp==2.9.0
-snowflake-connector-python[pandas]==5.2.0
-pytest==8.4.2
+# Runtime (Streamlit Community Cloud installs this file).
+# Ranges, not exact pins, so the app installs on every Python version Streamlit Cloud
+# offers (3.11-3.14); tested with the versions noted in README.
+streamlit>=1.51,<2
+pandas>=2.2,<3
+numpy>=2.0,<3
+plotly>=6.0,<7
+scipy>=1.13,<2
+pulp>=2.9,<3            # 3.x/4.x changed the API and ship without the CBC solver
+snowflake-connector-python[pandas]>=3.12,<6
+pytest>=8
