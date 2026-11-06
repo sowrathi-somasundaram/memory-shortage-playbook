@@ -1,0 +1,10 @@
+{
+  "runs": 10000,
+  "seed": 2026,
+  "recommended": "f",
+  "target_met": true,
+  "robustness_scenarios": 500,
+  "robustness_runs_per_scenario": 1000,
+  "params_fingerprint": "3d9ae38a71aee2fd",
+  "generated": "2026-11-03 19:00"
+}
