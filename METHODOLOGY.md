@@ -149,4 +149,9 @@ dbt staging views type and rename these columns. dbt mart tables join, derive an
 
 **One SQL codebase, two engines.** The same dbt models run on Snowflake and on DuckDB. A pytest rebuilds them on DuckDB and compares the result with the committed fallback snapshot. The SQL is written to be portable (ANSI casts, window functions, and dbt's `dateadd` macro).
 
-**Limitation.** The Snowflake path (`scripts/load_snowflake.py`, the `snowflake` dbt target, and the app's Snowflake reader) was written against the Snowflake connector 5.2 and dbt-snowflake 1.12 APIs. It has been tested only with a fake connection, not against a live account. Run setup step 4 in the README and confirm `dbt build` reports `PASS=63` on your account.
+**Verified on a live account (2026-11-05).** The Snowflake path was run on a Snowflake trial account (Enterprise edition, AWS):
+- all 15 RAW tables loaded;
+- `dbt build` on the `snowflake` target passed all 63 nodes (24 models, 39 tests);
+- the read-only `SHORTAGE_APP` user read all 9 marts, and every one matched the DuckDB snapshot exactly.
+
+**Remaining limitation.** The Snowflake marts are a static load of the precomputed outputs. Nothing refreshes them on a schedule; rerun `scripts/load_snowflake.py --run-dbt` after regenerating results.

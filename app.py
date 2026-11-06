@@ -64,9 +64,10 @@ def snowflake_secrets() -> dict | None:
 
 
 @st.cache_data(ttl=3600, show_spinner="Reading marts from Snowflake…")
-def load_marts(use_snowflake: bool):
+def load_marts(account: str | None):
+    """account (None = local only) is the cache key, so changed secrets never reuse stale results."""
     local = warehouse.read_local_marts()
-    if not use_snowflake:
+    if account is None:
         return local, "Local mart snapshot (dbt on DuckDB)", None
     try:
         conn = warehouse.connect_snowflake(snowflake_secrets())
@@ -124,7 +125,7 @@ def tables_from_marts(marts: dict[str, pd.DataFrame]) -> dict:
 
 
 sf_cfg = snowflake_secrets()
-marts, data_source, source_note = load_marts(sf_cfg is not None)
+marts, data_source, source_note = load_marts(sf_cfg.get("account") if sf_cfg else None)
 pre = tables_from_marts(marts)
 base_params = data.Params()
 stale = pre["meta"]["params_fingerprint"] != params_fingerprint(base_params)

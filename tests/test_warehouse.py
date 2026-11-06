@@ -125,7 +125,8 @@ def test_contract_check_flags_missing_columns(marts):
     assert any("is_recommended" in p for p in problems) and any("mart_market_ppi" in p for p in problems)
 
 
-def test_app_falls_back_to_local_marts_when_snowflake_unreachable():
+def test_app_falls_back_to_local_marts_when_snowflake_unreachable(monkeypatch):
+    monkeypatch.delenv("MARTS_SOURCE", raising=False)
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
     from streamlit.testing.v1 import AppTest
