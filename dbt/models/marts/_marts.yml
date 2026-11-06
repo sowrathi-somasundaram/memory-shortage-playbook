@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: mart_strategy_results
+    description: >
+      Strategy comparison for the FICTIONAL Aster Networks (10,000 Monte Carlo paths, seed 2026).
+      is_recommended applies the pre-registered rule: cheapest expected total cost with mean
+      fill rate >= service_target.
+    columns:
+      - name: strategy_key
+        data_tests: [unique, not_null]
+      - name: is_recommended
+        data_tests: [not_null]
+  - name: mart_strategy_monthly
+    columns:
+      - name: month_start_date
+        data_tests: [not_null]
+  - name: mart_strategy_ablation
+    columns:
+      - name: variant
+        data_tests: [unique, not_null]
+  - name: mart_freight_award
+    description: Optimized carrier award (PuLP/CBC) per slip scenario. Lanes and bids are hypothetical.
+    columns:
+      - name: loads
+        data_tests: [not_null]
+  - name: mart_freight_lanes
+  - name: mart_freight_scenarios
+    columns:
+      - name: scenario
+        data_tests: [unique, not_null]
+      - name: solver_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Optimal']
+  - name: mart_robustness_scenarios
+    columns:
+      - name: scenario_id
+        data_tests: [unique, not_null]
+  - name: mart_robustness_summary
+    columns:
+      - name: outcome
+        data_tests: [unique, not_null]
+  - name: mart_market_ppi
+    columns:
+      - name: index_jan2020_100
+        data_tests: [not_null]

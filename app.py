@@ -4,13 +4,14 @@ under AI-driven memory allocation.  Run:  streamlit run app.py
 from __future__ import annotations
 
 import json
+import os
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from shortage_lab import data, optimization, simulation
+from shortage_lab import data, simulation, warehouse
 from shortage_lab.cache import OUT, params_fingerprint
 
 st.set_page_config(page_title="Memory Shortage Playbook", page_icon="🔌", layout="wide")
@@ -49,20 +50,36 @@ def style(fig: go.Figure, height: int = 380) -> go.Figure:
 
 
 # --------------------------------------------------------------------------------------
-# Data loading (precomputed on first load; recomputed only when the user changes inputs)
+# Data loading. Base-case tables come from the dbt marts: Snowflake when the app has
+# Snowflake secrets, otherwise the local mart snapshot in precomputed/marts/ (built by the
+# same dbt models on DuckDB). Live what-if runs bypass the marts.
 # --------------------------------------------------------------------------------------
-@st.cache_data
-def load_precomputed():
-    meta = json.loads((OUT / "meta.json").read_text())
-    return {
-        "meta": meta,
-        "summary": pd.read_csv(OUT / "summary.csv", index_col="key"),
-        "monthly": pd.read_csv(OUT / "monthly.csv"),
-        "samples": pd.read_csv(OUT / "samples.csv"),
-        "ablation": pd.read_csv(OUT / "ablation.csv"),
-        "robustness": pd.read_csv(OUT / "robustness.csv"),
-        "freight_sweep": pd.read_csv(OUT / "freight_sweep.csv"),
-    }
+def snowflake_secrets() -> dict | None:
+    if os.environ.get("MARTS_SOURCE", "").lower() == "local":
+        return None
+    try:
+        return dict(st.secrets["snowflake"]) if "snowflake" in st.secrets else None
+    except Exception:  # no secrets file at all
+        return None
+
+
+@st.cache_data(ttl=3600, show_spinner="Reading marts from Snowflake…")
+def load_marts(use_snowflake: bool):
+    local = warehouse.read_local_marts()
+    if not use_snowflake:
+        return local, "Local mart snapshot (dbt on DuckDB)", None
+    try:
+        conn = warehouse.connect_snowflake(snowflake_secrets())
+        try:
+            remote = warehouse.read_snowflake_marts(conn, schema=snowflake_secrets().get("schema", "MARTS"))
+        finally:
+            conn.close()
+        problems = warehouse.check_mart_contract(remote, local)
+        if problems:
+            return local, "Local mart snapshot (dbt on DuckDB)", "Snowflake marts don't match the app: " + "; ".join(problems)
+        return remote, "Snowflake · MEMORY_SHORTAGE.MARTS", None
+    except Exception as exc:  # network, auth or timeout: fall back so the app still loads
+        return local, "Local mart snapshot (dbt on DuckDB)", f"Snowflake unavailable ({type(exc).__name__}); using local snapshot."
 
 
 @st.cache_data(show_spinner="Running 10,000-path Monte Carlo…")
@@ -85,13 +102,30 @@ def run_live(fill_a: float, lta_premium: float, dram_qoq: float, shock_prob: flo
     return summary, monthly, samples
 
 
-@st.cache_data
-def freight_award(slip: float):
-    r = optimization.solve_award(slip)
-    return r.award, r.lane_summary, r.freight_cost, r.penalty_cost, optimization.incumbent_cost(slip)
+def tables_from_marts(marts: dict[str, pd.DataFrame]) -> dict:
+    """Reshape marts into the frames the page uses."""
+    res = marts["mart_strategy_results"].rename(
+        columns={"strategy_key": "key", "strategy_name": "strategy", "p_line_down": "line_down"})
+    rob = marts["mart_robustness_scenarios"].rename(columns={"winner_key": "winner", "scenario_id": "scenario"})
+    return {
+        "meta": json.loads((OUT / "meta.json").read_text()),
+        "summary": res.set_index("key").sort_index(),
+        "monthly": marts["mart_strategy_monthly"].rename(columns={"strategy_key": "key", "month_number": "month"})
+                                                 .sort_values(["key", "month"]),
+        "samples": pd.read_csv(OUT / "samples.csv"),
+        "ablation": marts["mart_strategy_ablation"].sort_values("total_cost_vs_f", key=lambda v: v.abs()),
+        "robustness": rob.sort_values("scenario"),
+        "robustness_summary": marts["mart_robustness_summary"].set_index("outcome"),
+        "freight_sweep": marts["mart_freight_scenarios"].sort_values("mean_slip_days"),
+        "freight_award": marts["mart_freight_award"],
+        "freight_lanes": marts["mart_freight_lanes"],
+        "ppi": marts["mart_market_ppi"],
+    }
 
 
-pre = load_precomputed()
+sf_cfg = snowflake_secrets()
+marts, data_source, source_note = load_marts(sf_cfg is not None)
+pre = tables_from_marts(marts)
 base_params = data.Params()
 stale = pre["meta"]["params_fingerprint"] != params_fingerprint(base_params)
 
@@ -114,6 +148,10 @@ with st.sidebar:
     shock = st.slider("Probability of a further allocation cut", 0.0, 1.0, base_params.shock_prob, 0.05)
     runs = st.select_slider("Monte Carlo runs", [1000, 2500, 5000, 10000], 10000)
     st.caption(f"Seed fixed at {simulation.DEFAULT_SEED}; every strategy sees the same random paths.")
+    st.markdown("#### Data source")
+    st.caption(f"Base-case tables: **{data_source}**. What-if runs are computed live.")
+    if source_note:
+        st.caption(f"⚠️ {source_note}")
 
 is_default = (np.isclose(fill_a, d_fill) and np.isclose(lta_prem, base_params.lta_premium)
               and np.isclose(dram_qoq, d_qoq) and np.isclose(shock, base_params.shock_prob)
@@ -123,7 +161,11 @@ if is_default and not stale:
 else:
     summary, monthly, samples = run_live(fill_a, lta_prem, dram_qoq, shock, runs)
 
-rec, rec_ok = simulation.recommend(summary)
+if is_default and not stale:  # decision rule as applied in SQL by mart_strategy_results
+    rec = summary.index[summary["is_recommended"].astype(bool)][0]
+    rec_ok = bool(summary.loc[rec, "meets_service_target"])
+else:
+    rec, rec_ok = simulation.recommend(summary)
 R = summary.loc[rec]
 SQ = summary.loc["a"]
 n_runs = runs if not is_default else pre["meta"]["runs"]
@@ -214,7 +256,7 @@ with tabs[0]:
             f"If AI demand cools and prices fall, that stock is worth less.",
             f"**The answer depends on allocation.** In {counts.get('lose', 0)} of {n_rob} alternative "
             f"assumption sets a cheaper plan met the target, typically when A's fill rate averaged "
-            f"{loss['fill_A_dram'].mean():.0%} (vs {win['fill_A_dram'].mean():.0%} where (f) won)."
+            f"{loss['fill_a_dram'].mean():.0%} (vs {win['fill_a_dram'].mean():.0%} where (f) won)."
             if len(loss) else "**Allocation could worsen** beyond the tested ranges.",
             f"**Broker parts carry quality risk** (3% assumed incoming-inspection rejects; counterfeit "
             f"exposure is not modelled).",
@@ -244,7 +286,7 @@ with tabs[0]:
         "can't be built from parts that never get confirmed. "
         + (f"The plan won or tied in {(counts.get('win', 0) + counts.get('tie', 0)) / n_rob:.0%} of {n_rob} "
            f"stress-tested assumption sets. Re-check it each quarter against actual allocation confirmations, "
-           f"and step back toward a lighter hedge if A starts confirming around {loss['fill_A_dram'].mean():.0%} or more of requests."
+           f"and step back toward a lighter hedge if A starts confirming around {loss['fill_a_dram'].mean():.0%} or more of requests."
            if is_default else "")
     ))
     st.caption("All company figures are hypothetical. The conclusions describe this model's behaviour "
@@ -379,7 +421,7 @@ with tabs[2]:
             "Variant": abl["variant"], "Fill rate": abl["fill_rate"].map("{:.1%}".format),
             "Stockout prob.": abl["stockout_prob"].map("{:.1%}".format),
             "Total cost": abl["total_cost"].map(money),
-            "Δ vs (f)": (abl["total_cost"] - abl["total_cost"].iloc[0]).map(lambda v: f"{v / 1e6:+.2f}M"),
+            "Δ vs (f)": abl["total_cost_vs_f"].map(lambda v: f"{v / 1e6:+.2f}M"),
         }), hide_index=True, width="stretch")
 
 # --------------------------------------------------------------------------------------
@@ -390,10 +432,13 @@ with tabs[3]:
     st.caption(md("Lanes, volumes, carriers and bids are hypothetical. Truck bids are multiples (0.90–1.12×) "
                f"of the DAT Sept-2026 dry-van contract rate of ${data.MARKET_ANCHORS['dry_van_contract_per_mile'].value}/mile (S10). "
                "Benchmark = today's routing guide: the incumbent truck carrier on every lane, with urgent loads bought as spot air."))
-    scen = st.radio("Upstream lead-time slip scenario", list(optimization.SLIP_SCENARIOS), horizontal=True)
-    slip = optimization.SLIP_SCENARIOS[scen]
-    award, lanes, freight, penalty, inc = freight_award(slip)
-    inc_freight = inc["truck_cost"] + inc["air_cost"]
+    sweep = pre["freight_sweep"]
+    scen = st.radio("Upstream lead-time slip scenario", list(sweep["scenario"]), horizontal=True)
+    sc = sweep.set_index("scenario").loc[scen]
+    award = pre["freight_award"][pre["freight_award"]["scenario"] == scen]
+    lanes = pre["freight_lanes"][pre["freight_lanes"]["scenario"] == scen]
+    freight, inc_freight = sc["optimized_freight"], sc["incumbent_freight"]
+    penalty = sc["optimized_cost"] - sc["optimized_freight"]
     c = st.columns(4)
     c[0].metric("Optimized freight / month", money(freight, 3))
     c[1].metric("Incumbent routing guide / month", money(inc_freight, 3))
@@ -410,7 +455,7 @@ with tabs[3]:
         piv = piv.reindex(data.LANES["lane"]).fillna(0).astype(int)
         st.markdown("**Loads awarded per month**")
         st.dataframe(piv, width="stretch")
-        ls = lanes[["lane", "loads_per_month", "urgent_loads", "air_loads", "late_loads", "on_time_rate", "freight_cost"]]
+        ls = lanes.set_index("lane").reindex(data.LANES["lane"]).reset_index()[["lane", "loads_per_month", "urgent_loads", "air_loads", "late_loads", "on_time_rate", "freight_cost"]]
         st.dataframe(ls.assign(on_time_rate=ls["on_time_rate"].map("{:.1%}".format),
                                freight_cost=ls["freight_cost"].map(lambda v: f"${v:,.0f}")),
                      hide_index=True, width="stretch")
@@ -461,7 +506,7 @@ with tabs[4]:
         fig = go.Figure()
         for o in ["win", "tie", "lose"]:
             sub = rob[rob["outcome"] == o]
-            fig.add_trace(go.Scatter(x=sub["fill_A_dram"] * 100, y=sub["init_pipeline_fill_dram"] * 100,
+            fig.add_trace(go.Scatter(x=sub["fill_a_dram"] * 100, y=sub["init_pipeline_fill_dram"] * 100,
                                      mode="markers", name=o, marker=dict(color=OUTCOME_COLOR[o], size=8,
                                                                          line=dict(width=1, color="white")),
                                      hovertemplate="A fill %{x:.0f}% · pipeline %{y:.0f}%<extra>" + o + "</extra>"))
@@ -469,9 +514,10 @@ with tabs[4]:
                           xaxis_title="Supplier A DRAM fill rate (%)", yaxis_title="Existing DRAM pipeline (% of need)")
         st.plotly_chart(style(fig), width="stretch")
     st.markdown("**Average inputs by outcome**")
-    cols = ["fill_A_dram", "init_pipeline_fill_dram", "fill_lta_dram", "lta_premium", "dram_qoq",
-            "broker_markup", "broker_cap", "shock_prob", "lead_shift"]
-    st.dataframe(rob.groupby("outcome")[cols].mean().round(3), width="stretch")
+    rs = pre["robustness_summary"].reindex(["win", "tie", "lose"])
+    st.dataframe(rs[["n_sets", "share_of_sets", "avg_fill_a_dram", "avg_init_pipeline_fill_dram", "avg_fill_lta_dram",
+                     "avg_lta_premium", "avg_dram_qoq", "avg_broker_markup", "avg_broker_cap", "avg_shock_prob",
+                     "avg_lead_shift", "avg_cost_gap_to_winner"]].round(3), width="stretch")
 
 # --------------------------------------------------------------------------------------
 # 6. Market data & sources
@@ -480,16 +526,18 @@ with tabs[5]:
     st.subheader("Public price indexes (FRED, snapshot 2026-11-03)")
     fig = go.Figure()
     palette = [BLUE, ORANGE, AQUA, "#eda100"]
+    ppi = pre["ppi"].sort_values("observation_date")
     for (sid, label), color in zip(data.FRED_SERIES.items(), palette):
-        s = data.load_fred(sid)
-        s = s[s.index >= "2020-01-01"]
-        fig.add_trace(go.Scatter(x=s.index, y=s / s.iloc[0] * 100, name=f"{label} ({sid})",
+        s = ppi[(ppi["series_id"] == sid) & (ppi["observation_date"] >= "2020-01-01")]
+        fig.add_trace(go.Scatter(x=s["observation_date"], y=s["index_jan2020_100"], name=f"{label} ({sid})",
                                  line=dict(color=color, width=2),
                                  hovertemplate="%{x|%b %Y}: %{y:.1f}"))
     fig.update_layout(title="Producer price indexes, Jan-2020 = 100", yaxis_title="Index", hovermode="x unified")
     st.plotly_chart(style(fig, 420), width="stretch")
+    yoy = ppi.groupby("series_id").last()["yoy_change"]
     st.caption("BLS PPIs are quality-adjusted industry indexes. The broad semiconductor-device PPI "
-               "(PCU334413334413) is down 2.2% year on year even while DDR4 spot prices have multiplied, "
-               "so the model takes DRAM prices from TrendForce rather than the PPI. The components PPI "
-               "(PCU33443344, +26% YoY) drives PMIC price drift. The truckload and air PPIs give context for freight rates.")
+               f"(PCU334413334413) is {yoy['PCU334413334413']:+.1%} year on year even while DDR4 spot prices "
+               "have multiplied, so the model takes DRAM prices from TrendForce rather than the PPI. The components "
+               f"PPI (PCU33443344, {yoy['PCU33443344']:+.1%} YoY) drives PMIC price drift. The truckload and air PPIs "
+               "give context for freight rates.")
     st.markdown("Full source list with links: **SOURCES.md** in the repository.")

@@ -53,11 +53,13 @@ def main(quick: bool) -> None:
 
     sweep = optimization.slip_sweep()
     sweep.to_csv(OUT / "freight_sweep.csv", index=False)
-    awards = []
+    awards, lanes = [], []
     for name, slip in optimization.SLIP_SCENARIOS.items():
-        a = optimization.solve_award(slip).award.assign(scenario=name)
-        awards.append(a)
+        res = optimization.solve_award(slip)
+        awards.append(res.award.assign(scenario=name))
+        lanes.append(res.lane_summary.assign(scenario=name))
     pd.concat(awards).to_csv(OUT / "freight_awards.csv", index=False)
+    pd.concat(lanes).to_csv(OUT / "freight_lanes.csv", index=False)
 
     n = 60 if quick else 500
     rob = robustness.robustness(rec, n_scenarios=n, runs=1000)

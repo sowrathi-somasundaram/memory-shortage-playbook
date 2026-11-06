@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Loaded by scripts/load_snowflake.py (Snowflake) or scripts/build_local_marts.py (DuckDB)
+      from shortage_lab.warehouse.build_raw_tables(). Market data is public (SOURCES.md);
+      company and simulation data describe the FICTIONAL Aster Networks.
+    schema: raw
+    tables:
+      - name: raw_fred_ppi
+        description: FRED producer price index snapshots (downloaded 2026-11-03), 2015 onward.
+      - name: raw_market_anchors
+        description: Sourced market anchors (S1-S10) used by the model.
+      - name: raw_strategies
+      - name: raw_strategy_summary
+        description: Monte Carlo means and percentiles per strategy (10,000 paths, seed 2026).
+      - name: raw_strategy_monthly
+      - name: raw_strategy_samples
+        description: 2,000 sampled paths per strategy (total cost, fill rate).
+      - name: raw_ablation
+      - name: raw_lanes
+      - name: raw_carrier_bids
+      - name: raw_slip_scenarios
+      - name: raw_freight_awards
+      - name: raw_freight_lanes
+      - name: raw_freight_sweep
+      - name: raw_robustness
+        description: One row per random assumption set (500 sets x 1,000 paths).
+      - name: raw_run_meta

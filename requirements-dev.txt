@@ -1,0 +1,6 @@
+# Local development: warehouse build (dbt on DuckDB) and Snowflake loading
+-r requirements.txt
+dbt-core==1.12.6
+dbt-snowflake==1.12.5
+dbt-duckdb==1.11.1
+duckdb==2.0.0

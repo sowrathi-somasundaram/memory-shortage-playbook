@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: stg_strategies
+    columns:
+      - name: strategy_key
+        data_tests: [unique, not_null]
+  - name: stg_strategy_summary
+    columns:
+      - name: strategy_key
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_strategies')
+                field: strategy_key
+  - name: stg_lanes
+    columns:
+      - name: lane
+        data_tests: [unique, not_null]
+  - name: stg_slip_scenarios
+    columns:
+      - name: scenario
+        data_tests: [unique, not_null]
+  - name: stg_freight_awards
+    columns:
+      - name: lane
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_lanes')
+                field: lane
+      - name: mode
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['truck', 'air']
+  - name: stg_robustness
+    columns:
+      - name: scenario_id
+        data_tests: [unique, not_null]
+      - name: outcome
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['win', 'tie', 'lose']
+  - name: stg_run_meta
+    data_tests:
+      - exactly_one_row

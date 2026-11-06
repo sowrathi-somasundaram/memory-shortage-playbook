@@ -1,0 +1,22 @@
+name: memory_shortage
+version: "1.0.0"
+config-version: 2
+profile: memory_shortage
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages", "logs"]
+
+vars:
+  horizon_start: "2026-11-01"   # month 1 of the simulation = Nov-2026
+
+models:
+  memory_shortage:
+    staging:
+      +schema: staging
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table

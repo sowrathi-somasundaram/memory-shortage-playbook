@@ -133,3 +133,20 @@ An **ablation** removes one lever at a time from (f).
 - **Freight volumes are not linked to the Monte Carlo.** The freight module is a monthly snapshot, and its savings depend on the hypothetical bid spreads.
 - **Pipeline orders that arrive after the horizon are excluded** from both cost and value for every strategy.
 - **Monte Carlo error.** With 10,000 paths, the standard error of mean total cost is $0.08–0.10M per strategy. Because strategies share random paths, the standard error of the difference between (f) and any other strategy is only $0.03–0.06M, far below the $8M+ gaps reported. The robustness check uses 1,000 paths per set, so near-ties there are noisier.
+
+## 8. Data pipeline (Snowflake + dbt)
+
+**Model is unchanged.** The warehouse layer adds no new modelling. It stores and serves the outputs described above.
+
+**Layers.** RAW holds:
+- the cleaned market data: FRED snapshots and the sourced anchors;
+- the hypothetical company inputs: lanes and carrier bids;
+- the simulation, optimizer and robustness outputs.
+
+dbt staging views type and rename these columns. dbt mart tables join, derive and aggregate them, for example deltas versus the status quo, share of lane, PPIs rebased to Jan-2020 = 100, and year-over-year change.
+
+**The decision rule appears twice.** It is applied once in Python (`simulation.recommend`) and once in SQL (`mart_strategy_results.is_recommended`). A dbt test fails if the two disagree.
+
+**One SQL codebase, two engines.** The same dbt models run on Snowflake and on DuckDB. A pytest rebuilds them on DuckDB and compares the result with the committed fallback snapshot. The SQL is written to be portable (ANSI casts, window functions, and dbt's `dateadd` macro).
+
+**Limitation.** The Snowflake path (`scripts/load_snowflake.py`, the `snowflake` dbt target, and the app's Snowflake reader) was written against the Snowflake connector 5.2 and dbt-snowflake 1.12 APIs. It has been tested only with a fake connection, not against a live account. Run setup step 4 in the README and confirm `dbt build` reports `PASS=63` on your account.

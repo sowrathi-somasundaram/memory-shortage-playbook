@@ -1,0 +1,25 @@
+scenario,mean_slip_days,lane,slip_exposed,loads_per_month,urgent_share,late_share,urgent_loads,air_loads,late_loads,unrecoverable_loads,on_time_rate,freight_cost
+On plan (mean slip 1 day),1.0,Dallas WH -> Austin plant,False,52,0.0,0.0,0,0,0,0,0.9307692307692308,33927.26
+On plan (mean slip 1 day),1.0,Dallas WH -> San Jose plant,True,6,0.0172713904760712,7.987476059326673e-05,1,1,0,0,0.9366666666666666,50375.08
+On plan (mean slip 1 day),1.0,LAX port -> Dallas WH,True,55,7.796166262303932e-05,1.9130979702274063e-06,1,1,0,0,0.9303636363636364,264019.67
+On plan (mean slip 1 day),1.0,LAX port -> Reno WH,True,40,6.74018298067132e-05,1.2472930786553523e-05,1,1,0,0,0.93,82672.51999999999
+On plan (mean slip 1 day),1.0,Reno WH -> Austin plant,True,6,0.0172713904760712,7.987476059326673e-05,1,1,0,0,0.9333333333333336,48858.86
+On plan (mean slip 1 day),1.0,Reno WH -> San Jose plant,False,38,0.0,0.0,0,0,0,0,0.9305263157894736,33543.72
+Minor slip (3 days),3.0,Dallas WH -> Austin plant,False,52,0.0,0.0,0,0,0,0,0.9307692307692308,33927.26
+Minor slip (3 days),3.0,Dallas WH -> San Jose plant,True,6,0.314427655266167,0.0915781944436709,2,2,1,0,0.9333333333333332,67536.92
+Minor slip (3 days),3.0,LAX port -> Dallas WH,True,55,0.0610011778160717,0.0305770166275991,4,4,2,0,0.9303636363636364,315847.95
+Minor slip (3 days),3.0,LAX port -> Reno WH,True,40,0.038291339985198,0.0532868544584728,2,2,2,0,0.93,99722.04
+Minor slip (3 days),3.0,Reno WH -> Austin plant,True,6,0.314427655266167,0.0915781944436709,2,2,1,0,0.93,66069.4
+Minor slip (3 days),3.0,Reno WH -> San Jose plant,False,38,0.0,0.0,0,0,0,0,0.9305263157894736,33543.72
+Major slip (5 days),5.0,Dallas WH -> Austin plant,False,52,0.0,0.0,0,0,0,0,0.9307692307692308,33927.26
+Major slip (5 days),5.0,Dallas WH -> San Jose plant,True,6,0.3541862250228422,0.3084410411840024,3,3,2,0,0.93,84698.76
+Major slip (5 days),5.0,LAX port -> Dallas WH,True,55,0.1372397844748643,0.171201256709138,8,8,9,0,0.9299999999999998,392488.35
+Major slip (5 days),5.0,LAX port -> Reno WH,True,40,0.0773628032081742,0.2310782379758282,4,4,9,0,0.93,142535.12
+Major slip (5 days),5.0,Reno WH -> Austin plant,True,6,0.3541862250228422,0.3084410411840024,3,3,2,0,0.93,85939.94
+Major slip (5 days),5.0,Reno WH -> San Jose plant,False,38,0.0,0.0,0,0,0,0,0.9305263157894736,33543.72
+Severe slip (8 days),8.0,Dallas WH -> Austin plant,False,52,0.0,0.0,0,0,0,0,0.9307692307692308,33927.26
+Severe slip (8 days),8.0,Dallas WH -> San Jose plant,True,6,0.2688160669257009,0.5578254003710748,2,2,3,0,0.9333333333333332,67536.92
+Severe slip (8 days),8.0,LAX port -> Dallas WH,True,55,0.1518195506612368,0.4060058497098379,9,9,22,0,0.9303636363636364,409996.92
+Severe slip (8 days),8.0,LAX port -> Reno WH,True,40,0.0799470558823507,0.477878344488724,4,4,19,0,0.93,142535.12
+Severe slip (8 days),8.0,Reno WH -> Austin plant,True,6,0.2688160669257009,0.5578254003710748,2,2,3,0,0.93,66069.4
+Severe slip (8 days),8.0,Reno WH -> San Jose plant,False,38,0.0,0.0,0,0,0,0,0.9305263157894736,33543.72
